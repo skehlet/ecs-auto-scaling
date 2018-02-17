@@ -31,13 +31,19 @@ resource "aws_launch_configuration" "jump_box" {
 }
 
 resource "aws_autoscaling_group" "jump_box" {
+  name_prefix = "${var.app_name}-${var.environment}-jump-box"
   launch_configuration = "${aws_launch_configuration.jump_box.id}"
   vpc_zone_identifier  = ["${aws_subnet.public.*.id}"]
   min_size = 1
   max_size = 1
   tag {
     key = "Name"
-    value = "jump-box"
+    value = "${var.app_name}-${var.environment}-jump-box"
     propagate_at_launch = true
+  }
+  tag {
+    key = "Environment"
+    propagate_at_launch = true
+    value = "${var.environment}"
   }
 }

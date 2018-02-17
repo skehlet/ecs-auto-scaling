@@ -20,44 +20,6 @@ resource "aws_iam_role" "ecs_instance_role" {
 EOF
 }
 
-//data "aws_iam_policy_document" "iam_policy_document_1" {
-//  statement {
-//    actions = [
-//      "logs:CreateLogGroup",
-//      "logs:CreateLogStream",
-//      "logs:PutLogEvents",
-//      "logs:DescribeLogStreams",
-//    ]
-//    resources = ["*"]
-//  }
-//
-//  statement {
-//    actions = ["ecs:*"]
-//    resources = ["*"]
-//  }
-//
-//  statement {
-//    actions = ["ec2:DescribeInstances"]
-//    resources = ["*"]
-//  }
-//
-//  statement {
-//    actions = [
-//      "ecr:BatchCheckLayerAvailability",
-//      "ecr:BatchGetImage",
-//      "ecr:GetDownloadUrlForLayer",
-//      "ecr:GetAuthorizationToken",
-//    ]
-//    resources = ["*"]
-//  }
-//}
-
-//resource "aws_iam_role_policy" "iam_role_policy_1" {
-//  name   = "${var.app_name}-${var.environment}-ecs"
-//  role   = "${aws_iam_role.iam_role_1.id}"
-//  policy = "${data.aws_iam_policy_document.iam_policy_document_1.json}"
-//}
-
 resource "aws_iam_role_policy_attachment" "iam_policy_attachment" {
   role = "${aws_iam_role.ecs_instance_role.name}"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
@@ -67,7 +29,6 @@ resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "${var.app_name}-${var.environment}"
   role = "${aws_iam_role.ecs_instance_role.name}"
 }
-
 
 resource "aws_security_group" "ecs_instance" {
   name        = "${var.app_name}-${var.environment}-ecs-sg"
@@ -89,8 +50,6 @@ resource "aws_security_group" "ecs_instance" {
     Environment = "${var.environment}"
   }
 }
-
-
 
 resource "aws_launch_configuration" "ecs_instance" {
   name_prefix          = "${var.app_name}-${var.environment}"
@@ -120,23 +79,13 @@ EOUSERDATA
   }
 }
 
-resource "aws_autoscaling_group" "autoscaling_group_1" {
-  name                 = "${var.app_name}-${var.environment}-ecs"
+resource "aws_autoscaling_group" "ecs_instance" {
+  name_prefix          = "${var.app_name}-${var.environment}-ecs"
   vpc_zone_identifier  = ["${aws_subnet.private.*.id}"]
   max_size             = "${var.ecs_max_size}"
   min_size             = "${var.ecs_min_size}"
   desired_capacity     = "${var.ecs_desired_capacity}"
   launch_configuration = "${aws_launch_configuration.ecs_instance.name}"
-
-//  health_check_grace_period = "${var.health_check_grace_period}"
-//  health_check_type         = "${var.health_check_type}"
-//  force_delete              = false
-//  termination_policies      = "${var.termination_policies}"
-//  wait_for_capacity_timeout = "10m"
-//  protect_from_scale_in     = "${var.scale_in_protection}"
-
-//  enabled_metrics = ["GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity", "GroupInServiceInstances", "GroupPendingInstances", "GroupStandbyInstances", "GroupTerminatingInstances", "GroupTotalInstances"]
-
   tag {
     key = "Name"
     propagate_at_launch = true
@@ -157,3 +106,61 @@ resource "aws_ecs_cluster" "cluster" {
 resource "aws_ecr_repository" "ecr" {
   name = "${var.app_name}"
 }
+
+resource "aws_cloudwatch_log_group" "container" {
+  name              = "${var.app_name}-${var.environment}-container"
+  retention_in_days = "3"
+}
+
+// revisit this if putting services behind a load balancer
+//resource "aws_iam_role" "ecs_container_role" {
+//  name = "${var.app_name}-${var.environment}-ecs-container-role"
+//  force_detach_policies = true
+//  assume_role_policy = <<EOF
+//{
+//  "Version": "2008-10-17",
+//  "Statement": [
+//    {
+//      "Sid": "",
+//      "Effect": "Allow",
+//      "Principal": {
+//        "Service": [
+//          "ecs.amazonaws.com",
+//          "ecs-tasks.amazonaws.com"
+//        ]
+//      },
+//      "Action": "sts:AssumeRole"
+//    }
+//  ]
+//}
+//EOF
+//}
+//
+//resource "aws_iam_role_policy" "ecs_policy" {
+//  name = "${var.app_name}-${var.environment}-ecs-container-policy"
+//  role = "${aws_iam_role.ecs_container_role.id}"
+//  policy = <<EOF
+//{
+//  "Version": "2012-10-17",
+//  "Statement": [
+//    {
+//      "Effect": "Allow",
+//      "Action": [
+//        "ec2:Describe*",
+//        "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+//        "elasticloadbalancing:DeregisterTargets",
+//        "elasticloadbalancing:Describe*",
+//        "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+//        "elasticloadbalancing:RegisterTargets"
+//      ],
+//      "Resource": "*"
+//    }
+//  ]
+//}
+//EOF
+//}
+//
+//resource "aws_iam_role_policy_attachment" "iam_policy_attachment" {
+//  role = "${aws_iam_role.ecs_container_role.name}"
+//  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"
+//}
