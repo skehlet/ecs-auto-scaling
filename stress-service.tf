@@ -1,10 +1,12 @@
 resource "aws_ecs_task_definition" "stress" {
   family = "${var.app_name}-${var.environment}-stress"
+  # We specify 64 cpu units, which is 1/16 of a single CPU (1024).
+  # Pegging a single CPU will therefore show up as "1600%".
   container_definitions = <<EOF
 [
     {
         "command": ["-c", "1", "--timeout", "150"],
-        "cpu": 512,
+        "cpu": 64,
         "image": "519765885403.dkr.ecr.us-west-2.amazonaws.com/ecs-autoscaling-dev-timed-stress:latest",
         "logConfiguration": {
             "logDriver": "awslogs",
@@ -14,7 +16,7 @@ resource "aws_ecs_task_definition" "stress" {
               "awslogs-stream-prefix": "${var.app_name}-${var.environment}-stress"
             }
         },
-        "memoryReservation": 256,
+        "memoryReservation": 64,
         "name": "${var.app_name}-${var.environment}-stress"
     }
 ]
@@ -39,7 +41,7 @@ resource "aws_cloudwatch_metric_alarm" "stress_high_cpu" {
   namespace           = "AWS/ECS"
   period              = "60"
   statistic           = "Average"
-  threshold           = "75"
+  threshold           = "1200" # 75% of 1600%
 
   dimensions {
     ClusterName = "${aws_ecs_cluster.cluster.name}"
@@ -57,7 +59,7 @@ resource "aws_cloudwatch_metric_alarm" "stress_low_cpu" {
   namespace           = "AWS/ECS"
   period              = "60"
   statistic           = "Average"
-  threshold           = "25"
+  threshold           = "400" # 25% of 1600%
 
   dimensions {
     ClusterName = "${aws_ecs_cluster.cluster.name}"
