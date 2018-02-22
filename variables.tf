@@ -61,7 +61,7 @@ variable "ecs_max_size" {
 }
 
 variable "ecs_desired_capacity" {
-  default = 1
+  default = 3
 }
 
 variable "jump_box_ami" {

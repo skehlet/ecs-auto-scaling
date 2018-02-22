@@ -3,9 +3,9 @@ resource "aws_ecs_task_definition" "stress" {
   container_definitions = <<EOF
 [
     {
-        "command": ["-c", "1"],
-        "cpu": 1024,
-        "image": "progrium/stress",
+        "command": ["-c", "1", "--timeout", "150"],
+        "cpu": 512,
+        "image": "519765885403.dkr.ecr.us-west-2.amazonaws.com/ecs-autoscaling-dev-timed-stress:latest",
         "logConfiguration": {
             "logDriver": "awslogs",
             "options": {
@@ -14,7 +14,7 @@ resource "aws_ecs_task_definition" "stress" {
               "awslogs-stream-prefix": "${var.app_name}-${var.environment}-stress"
             }
         },
-        "memoryReservation": 512,
+        "memoryReservation": 256,
         "name": "${var.app_name}-${var.environment}-stress"
     }
 ]
@@ -27,3 +27,94 @@ resource "aws_ecs_service" "stress" {
   task_definition = "${aws_ecs_task_definition.stress.arn}"
   desired_count   = 1
 }
+
+
+
+
+resource "aws_cloudwatch_metric_alarm" "stress_high_cpu" {
+  alarm_name          = "${var.app_name}-${var.environment}-stress-cpu-high"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "75"
+
+  dimensions {
+    ClusterName = "${aws_ecs_cluster.cluster.name}"
+    ServiceName = "${aws_ecs_service.stress.name}"
+  }
+
+  alarm_actions = ["${aws_appautoscaling_policy.stress_autoscale_out.arn}"]
+}
+
+resource "aws_cloudwatch_metric_alarm" "stress_low_cpu" {
+  alarm_name          = "${var.app_name}-${var.environment}-stress-cpu-low"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "25"
+
+  dimensions {
+    ClusterName = "${aws_ecs_cluster.cluster.name}"
+    ServiceName = "${aws_ecs_service.stress.name}"
+  }
+
+  alarm_actions = ["${aws_appautoscaling_policy.stress_autoscale_in.arn}"]
+}
+
+resource "aws_appautoscaling_target" "stress_autoscaling_target" {
+  min_capacity       = 1
+  max_capacity       = 3
+  resource_id        = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.stress.name}"
+  role_arn           = "${aws_iam_role.ecs_autoscaling_role.arn}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "stress_autoscale_out" {
+  name               = "${var.app_name}-${var.environment}-stress-scale-out"
+  policy_type        = "StepScaling"
+  resource_id        = "${aws_appautoscaling_target.stress_autoscaling_target.resource_id}"
+  scalable_dimension = "${aws_appautoscaling_target.stress_autoscaling_target.scalable_dimension}"
+  service_namespace  = "${aws_appautoscaling_target.stress_autoscaling_target.service_namespace}"
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 60
+    metric_aggregation_type = "Average"
+
+    step_adjustment {
+      metric_interval_lower_bound = 0
+      scaling_adjustment          = 1
+    }
+  }
+
+  depends_on = ["aws_appautoscaling_target.stress_autoscaling_target"]
+}
+
+resource "aws_appautoscaling_policy" "stress_autoscale_in" {
+  name               = "${var.app_name}-${var.environment}-stress-scale-in"
+  policy_type        = "StepScaling"
+  resource_id        = "${aws_appautoscaling_target.stress_autoscaling_target.resource_id}"
+  scalable_dimension = "${aws_appautoscaling_target.stress_autoscaling_target.scalable_dimension}"
+  service_namespace  = "${aws_appautoscaling_target.stress_autoscaling_target.service_namespace}"
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 60
+    metric_aggregation_type = "Average"
+
+    step_adjustment {
+      metric_interval_upper_bound = 0
+      scaling_adjustment          = -1
+    }
+  }
+
+  depends_on = ["aws_appautoscaling_target.stress_autoscaling_target"]
+}
+
